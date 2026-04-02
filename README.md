@@ -86,12 +86,23 @@ DevMentor AI is a state-of-the-art, AI-powered learning platform designed to pro
 2. Ensure the API configuration in `frontend/js/api_config.js` (if applicable) points to `http://localhost:8000`.
 
 ## 📈 Roadmap
-- [x] Core AI Roadmap Generation
-- [x] Logic-based Quiz Engine
-- [x] Real-time Study Reminders
-- [ ] Mobile App (PWA) Integration
-- [ ] Peer-to-Peer Learning Groups
-- [ ] Collaborative Coding Sandboxes
+
+### ✅ Completed
+- [x] **AI Roadmap Engine**: Dynamic generation of learning paths using Google Gemini.
+- [x] **Adaptive Quiz Logic**: Scenario-based testing for practical knowledge validation.
+- [x] **Dev Studio Assistant**: Context-aware AI mentor for deep doubt resolution.
+- [x] **Automated Reminders**: Background task for scheduled study notifications via Pushover.
+- [x] **Intelligence Dashboard**: Progress tracking with identification of "Weak Topics".
+- [x] **Secure Auth**: Full user management and data persistence.
+- [x] **Responsive Core**: Modern, high-performance UI tailored for both desktop and tablet.
+
+### 🚀 Future Improvements
+- [ ] **Achievement System**: Gamified badges and points for streak preservation.
+- [ ] **Multi-Channel Notifications**: Integration with Telegram, Discord, and Email alerts.
+- [ ] **Community Groups**: Peer-to-peer learning spaces and roadmap sharing.
+- [ ] **Code Playground**: Integrated sandbox for practicing coding tasks without leaving the app.
+- [ ] **PWA Support**: Full offline capabilities and mobile-app-like installation.
+- [ ] **Roadmap Export**: Export your learning path as PDF or Markdown.
 
 ## 📄 License
 This project is licensed under the MIT License.
