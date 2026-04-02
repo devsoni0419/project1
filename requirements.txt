@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+google-genai
+python-dotenv
+groq
+requests
+passlib[bcrypt]

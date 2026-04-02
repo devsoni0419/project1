@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - DevMentor AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .auth-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 80vh;
+        }
+        .auth-card {
+            max-width: 400px;
+            width: 100%;
+            padding: 2rem;
+            text-align: center;
+        }
+        .auth-footer {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        .auth-footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        .error-message {
+            color: #ff6b6b;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="background-effects">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+    </div>
+    
+    <header class="glass-header" style="justify-content: center;">
+        <div class="logo">
+             <i class="fa-solid fa-code"></i> DevMentor AI
+        </div>
+    </header>
+
+    <main class="container auth-container">
+        <div class="auth-card glass-card fade-in">
+            <h2>Welcome Back</h2>
+            <p>Log in to continue your learning journey.</p>
+            <div id="login-error" class="error-message">Invalid credentials</div>
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="developer123" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="password" placeholder="••••••••" required>
+                        <i class="fa-solid fa-eye toggle-password" id="togglePasswordBtn"></i>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary" id="btn-login" style="width: 100%;">
+                    <span id="btn-text">Log In <i class="fa-solid fa-arrow-right"></i></span>
+                </button>
+            </form>
+            <div class="auth-footer">
+                Don't have an account? <a href="signup.html">Sign up</a>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/auth.js"></script>
+</body>
+</html>

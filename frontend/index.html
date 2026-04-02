@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="DevMentorAI - Intelligent Study Companion">
+    <title>DevMentor AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-effects">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="glass-header">
+        <div class="logo">
+             <i class="fa-solid fa-code"></i> DevMentor AI
+        </div>
+        <div class="header-nav" style="display:flex; gap:20px; align-items:center;">
+            <button id="btn-back-to-library" class="btn-secondary hidden" onclick="showLibrary()"><i class="fa-solid fa-arrow-left"></i> My Roadmaps</button>
+            <div class="user-stats" style="display:flex; gap:15px; align-items:center;">
+                <span class="streak"><i class="fa-solid fa-fire"></i> <span id="streak-count">0</span> Day Streak</span>
+                <span id="user-greeting" style="font-weight: 600;"></span>
+                <button onclick="logout()" class="btn-secondary" style="padding: 5px 10px; font-size: 0.8rem;"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Goal Library Section -->
+        <section id="library-section" class="hidden fade-in">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2rem;">
+                <h2>My Roadmaps</h2>
+                <button class="btn-primary" onclick="showOnboarding()"><i class="fa-solid fa-plus"></i> New Goal</button>
+            </div>
+            <div id="roadmaps-grid" class="roadmaps-grid">
+                <!-- Roadmap cards inject here -->
+            </div>
+        </section>
+
+        <!-- Goal Setup Section -->
+        <section id="onboarding-section" class="glass-card fade-in hidden">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <h2>Set Your Learning Goal</h2>
+                    <p>Tell me what you want to achieve, and I'll craft a personalized day-by-day roadmap.</p>
+                </div>
+                <button class="btn-secondary" onclick="showLibrary()" id="btn-cancel-onboarding"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="goal-form">
+                <div class="input-group">
+                    <label for="goal-title">What do you want to learn?</label>
+                    <input type="text" id="goal-title" placeholder="e.g., Master Data Structures in 30 Days" required>
+                </div>
+                <div class="input-group">
+                    <label for="daily-hours">Daily study hours</label>
+                    <input type="number" id="daily-hours" step="0.5" placeholder="2.5" required>
+                </div>
+                <button type="submit" class="btn-primary" id="btn-create-goal">
+                    <span id="btn-text">Generate Roadmap <i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                </button>
+            </form>
+        </section>
+
+        <!-- Main Dashboard View -->
+        <section id="dashboard-section" class="hidden fade-in">
+            <!-- Insights Dashboard (Agentic AI Feedback) -->
+            <div id="insights-panel" class="insights-container hidden mb-4">
+                <div class="insights-grid">
+                    <div class="insight-card glass-card main-status">
+                        <div style="display:flex; align-items:center; gap:15px;">
+                            <div class="insight-icon pulse"><i class="fa-solid fa-brain-circuit"></i></div>
+                            <div>
+                                <h4 id="insight-status">AI Analysis</h4>
+                                <p id="insight-desc">Calculating your learning trajectory...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="insight-card glass-card">
+                        <h4><i class="fa-solid fa-triangle-exclamation"></i> Weak Topics</h4>
+                        <ul id="weak-topics-list" class="insight-list">
+                            <li>Check quizzes to identify gaps</li>
+                        </ul>
+                    </div>
+                    <div class="insight-card glass-card">
+                        <h4><i class="fa-solid fa-wand-magic-sparkles"></i> AI Recommendations</h4>
+                        <p id="ai-reco-text" class="insight-text">Complete more quizzes for personalized advice.</p>
+                        <button class="btn-secondary btn-sm mt-3" onclick="requestManualReplanPopup()">
+                            <i class="fa-solid fa-arrows-rotate"></i> Request Re-plan
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Learning Plan -->
+                <div class="panel glass-card task-panel">
+                    <h3><i class="fa-solid fa-list-check"></i> Roadmap: <span id="active-goal-title" style="color:var(--accent-secondary)"></span></h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="overall-progress" style="width: 0%"></div>
+                    </div>
+                    <div id="tasks-container" class="task-list scrollable">
+                        <!-- Tasks inject here -->
+                    </div>
+                </div>
+
+                <!-- AI Mentor Panel -->
+                <div class="panel glass-card assistant-panel">
+                    <div class="panel-header-tabs">
+                        <h3 id="tab-study" class="tab-btn active" onclick="switchAssistantTab('study')"><i class="fa-solid fa-robot"></i> Study Assistant</h3>
+                        <h3 id="tab-studio" class="tab-btn" onclick="switchAssistantTab('studio')"><i class="fa-solid fa-laptop-code"></i> Dev Studio</h3>
+                    </div>
+
+                    <!-- Study Assistant View -->
+                    <div id="study-assistant-view" class="assistant-interface unified-mentor">
+                        <div class="mentor-workspace">
+                            <div class="chat-input-wrapper" style="background: transparent; padding: 0;">
+                                <textarea id="chat-editor" placeholder="Ask a question, explain a concept, or just chat..." spellcheck="false" class="chat-textarea font-sans" style="min-height: 150px;"></textarea>
+                            </div>
+                        </div>
+                        <div class="action-buttons mentor-actions">
+                            <button class="btn-primary" onclick="analyzeCode('solve_doubt')" style="width: 100%; justify-content: center;">
+                                <i class="fa-solid fa-paper-plane"></i> Ask My Tech Mentor
+                            </button>
+                        </div>
+                        <div id="ai-response" class="response-container hidden scrollable">
+                            <div class="response-content font-sans"></div>
+                        </div>
+                    </div>
+
+                    <!-- Dev Studio View (Separate Code Workspace) -->
+                    <div id="dev-studio-view" class="dev-studio-interface hidden">
+                        <div class="studio-workspace">
+                            <div class="editor-header">
+                                <select id="code-lang" class="lang-select">
+                                    <option value="python">Python</option>
+                                    <option value="javascript">JavaScript</option>
+                                    <option value="java">Java</option>
+                                    <option value="cpp">C++</option>
+                                </select>
+                                <span class="mentor-hint"><i class="fa-solid fa-code"></i> Professional Code Playground</span>
+                            </div>
+                            <textarea id="code-editor" placeholder="// Write or paste your code here to analyze..." spellcheck="false" class="full-editor font-mono"></textarea>
+                        </div>
+                        <div class="action-buttons studio-actions">
+                            <button class="btn-secondary" onclick="analyzeCode('debug')"><i class="fa-solid fa-bug"></i> Debug</button>
+                            <button class="btn-secondary" onclick="analyzeCode('explain')"><i class="fa-solid fa-comment-dots"></i> Explain</button>
+                            <button class="btn-secondary" onclick="analyzeCode('improve')"><i class="fa-solid fa-bolt"></i> Improve</button>
+                        </div>
+                        <div id="studio-ai-response" class="response-container hidden scrollable">
+                            <div class="response-content font-sans"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- Task Detail Modal -->
+    <div id="task-modal" class="modal-overlay hidden">
+        <div class="glass-modal fade-in-up">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h2 id="modal-task-title">Task Title</h2>
+            <div class="modal-body scrollable" style="max-height: 40vh;">
+             <p id="modal-task-desc" class="task-desc-detail"></p>
+             
+             <div class="reminder-section" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                 <label for="reminder-time" style="display:block; margin-bottom: 5px; font-size: 0.9em; font-weight: 600;"><i class="fa-regular fa-bell"></i> Set a reminder for this task</label>
+                 <div style="display:flex; gap:10px; align-items: center;">
+                     <input type="datetime-local" id="reminder-time" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;">
+                     <button class="btn-secondary" onclick="setTaskReminder()" style="padding: 8px 15px;"><i class="fa-solid fa-paper-plane"></i> Save</button>
+                 </div>
+                 <span id="reminder-status" style="display:block; margin-top:8px; font-size:0.8em; color:#10B981; min-height: 16px;"></span>
+             </div>
+        </div>
+            <div class="modal-actions" style="margin-top:20px; display:flex; gap:10px;">
+                <button class="btn-primary" id="btn-complete-task">Take the Quiz to Complete <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quiz Modal -->
+    <div id="quiz-modal" class="modal-overlay hidden">
+        <div class="glass-modal fade-in-up" style="max-width: 600px;">
+            <span class="close-modal" onclick="closeQuizModal()">&times;</span>
+            <h2>Task Quiz</h2>
+            <div id="quiz-loading" style="text-align: center; padding: 20px;">
+                <i class="fa-solid fa-circle-notch fa-spin fa-2x"></i> <br><br> Generating tailored questions...
+            </div>
+            <div id="quiz-content" class="hidden">
+                <form id="quiz-form">
+                    <div id="questions-container" class="scrollable" style="max-height: 50vh; padding-right: 10px;">
+                        <!-- Questions injected here -->
+                    </div>
+                    <div class="modal-actions" style="margin-top:20px;">
+                        <button type="submit" class="btn-primary">Submit Quiz <i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Make sure to use marked.js for parsing markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
