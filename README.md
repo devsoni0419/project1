@@ -42,10 +42,8 @@ DevMentor AI is a state-of-the-art, AI-powered learning platform designed to pro
 │   ├── css/                # Custom stylesheets
 │   ├── js/                 # API services and UI logic
 │   └── index.html          # Main Application Dashboard
-├── api/                    # Vercel Serverless Functions
-├── scripts/                # Utility and Database setup scripts
-├── vercel.json             # Deployment configuration
-└── requirements.txt        # Python dependencies
+├── requirements.txt        # Python dependencies
+└── README.md               # Project Documentation
 ```
 
 ## 🚀 Getting Started
