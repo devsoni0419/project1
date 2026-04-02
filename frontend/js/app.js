@@ -5,6 +5,7 @@ var API_URL = (window.location.hostname === 'localhost' || window.location.hostn
 let currentGoal = null;
 let currentTasks = [];
 let allRoadmaps = [];
+let dialogResolver = null;
 
 document.addEventListener("DOMContentLoaded", () => {
     const userId = localStorage.getItem("userId");
@@ -42,7 +43,11 @@ document.addEventListener("DOMContentLoaded", () => {
             selectRoadmap(goal);
         } catch (error) {
             console.error("Error creating goal", error);
-            alert("Failed to create goal. Make sure the FastAPI backend is running!");
+            showDialog({
+                title: "Connection Error",
+                message: "Failed to create goal. Make sure the FastAPI backend is running!",
+                type: "alert"
+            });
         } finally {
             btn.disabled = false;
             btnText.innerHTML = 'Generate Roadmap <i class="fa-solid fa-wand-magic-sparkles"></i>';
@@ -263,7 +268,7 @@ async function toggleTaskStatus(taskId, isCompleted) {
         await fetch(`${API_URL}/tasks/${taskId}?is_completed=${isCompleted}`, { method: "PUT" });
         await loadActiveRoadmap(currentGoal.id);
     } catch(err) {
-        alert("Action failed.");
+        showToast("Action failed.", "error");
     }
 }
 
@@ -336,6 +341,10 @@ async function openQuizModal(taskId) {
 
 function closeQuizModal() {
     document.getElementById("quiz-modal").classList.add("hidden");
+    // Reset views
+    document.getElementById("quiz-content").classList.remove("hidden");
+    document.getElementById("quiz-result").classList.add("hidden");
+    document.getElementById("quiz-loading").classList.add("hidden");
 }
 
 document.getElementById("quiz-form").addEventListener("submit", async (e) => {
@@ -344,16 +353,41 @@ document.getElementById("quiz-form").addEventListener("submit", async (e) => {
     
     const formData = new FormData(e.target);
     let score = 0;
+    const missed_questions = [];
+    const user_answers = [];
+    let reviewHTML = "";
+
     activeQuizData.questions.forEach((q, i) => {
         const userAns = formData.get(`q${i}`);
-        if(userAns) {
-            // Robust matching: trim, lowercase, and remove quotes/punctuation
-            const normalize = (s) => s.trim().toLowerCase().replace(/[.,!?;:'"“”]/g, '');
-            if(normalize(userAns) === normalize(q.correct_answer)) score++;
+        // Robust matching: trim, lowercase, and remove quotes/punctuation
+        const normalize = (s) => (s || "").trim().toLowerCase().replace(/[.,!?;:'"“”]/g, '');
+        const isCorrect = normalize(userAns) === normalize(q.correct_answer);
+        
+        if(isCorrect) {
+            score++;
+            reviewHTML += `
+                <div class="review-item correct">
+                    <span class="review-badge badge-correct">Correct</span>
+                    <span class="review-q">${q.question}</span>
+                    <span class="review-ans user">Your Answer: ${userAns}</span>
+                </div>
+            `;
+        } else {
+            missed_questions.push(q.question);
+            user_answers.push(userAns || "No answer");
+            reviewHTML += `
+                <div class="review-item incorrect">
+                    <span class="review-badge badge-incorrect">Incorrect</span>
+                    <span class="review-q">${q.question}</span>
+                    <span class="review-ans user">Your Answer: ${userAns || "No answer"}</span>
+                    <span class="review-ans correct">Correct Answer: ${q.correct_answer}</span>
+                </div>
+            `;
         }
     });
     
     const percentage = score / activeQuizData.questions.length;
+    document.getElementById("quiz-review-list").innerHTML = reviewHTML;
     
     try {
         const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -368,21 +402,50 @@ document.getElementById("quiz-form").addEventListener("submit", async (e) => {
                 task_id: activeTask.id,
                 score: percentage,
                 total_questions: activeQuizData.questions.length,
-                weak_areas: percentage < 0.6 ? `${activeTask.topic} fundamentals` : "None"
+                weak_areas: percentage < 1.0 ? `Reviewing missed concepts...` : "None",
+                missed_questions: missed_questions,
+                user_answers: user_answers
             })
         });
         const result = await res.json();
         
-        if (result.replanned) {
-            alert("Roadmap adjusted to help you master the topics you missed!");
+        // 1. Show score in UI
+        const scorePct = Math.round(percentage * 100);
+        const total = activeQuizData.questions.length;
+        document.getElementById("quiz-score-text").innerHTML = `${scorePct}%<br><span style="font-size: 0.4em; opacity: 0.8; font-weight: 400;">(${score}/${total})</span>`;
+        
+        const titleEl = document.getElementById("quiz-result-title");
+        const descEl = document.getElementById("quiz-result-desc");
+        
+        if (scorePct >= 80) {
+            titleEl.innerText = "Excellent Work!";
+            descEl.innerText = "You've mastered this topic. Ready for the next challenge!";
+        } else if (scorePct >= 60) {
+            titleEl.innerText = "Good Job!";
+            descEl.innerText = "You have a solid understanding, but keep practicing those concepts.";
         } else {
-            showToast("Quiz submitted successfully!");
+            titleEl.innerText = "Keep Learning!";
+            descEl.innerText = "This topic is tricky. We've updated your roadmap to help you master it.";
         }
+        
+        // 2. Switch views immediately
+        document.getElementById("quiz-loading").classList.add("hidden");
+        document.getElementById("quiz-content").classList.add("hidden");
+        document.getElementById("quiz-result").classList.remove("hidden");
+        
+        // 3. Trigger roadmap reload in background
+        loadActiveRoadmap(currentGoal.id);
 
-        closeQuizModal();
-        await loadActiveRoadmap(currentGoal.id);
+        // 4. Show dialog AFTER updating UI if needed
+        if (result.replanned) {
+            showDialog({
+                title: "Roadmap Adaptive Update",
+                message: "AI has adjusted your roadmap to help you master the topics you missed! Day 1 now focuses on your core gaps.",
+                type: "alert"
+            });
+        }
     } catch(err) {
-        showToast("Failed to submit quiz.");
+        showToast("Failed to submit quiz.", "error");
     } finally {
         const submitBtn = e.target.querySelector('button[type="submit"]');
         if (submitBtn) {
@@ -419,7 +482,7 @@ async function analyzeCode(action) {
     const responseContent = responseContainer.querySelector(".response-content");
     
     if(!code.trim() && !chatInput.trim()) {
-        alert("Please provide some code or ask a doubt!");
+        showToast("Please provide code or a question!", "info");
         return;
     }
     
@@ -445,7 +508,15 @@ async function analyzeCode(action) {
         
         // Agentic Intent: Replanning
         if (data.should_replan && data.replan_topic) {
-            triggerManualReplan(data.replan_topic);
+            const confirmReplan = await showDialog({
+                title: "Roadmap Adjustment Identified",
+                message: `The AI Mentor noticed you might be struggling with **${data.replan_topic}**. \n\nWould you like to instantly re-plan your remaining roadmap to focus on this topic?`,
+                type: "confirm"
+            });
+            
+            if (confirmReplan) {
+                triggerManualReplan(data.replan_topic);
+            }
         }
         
         responseContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -497,7 +568,12 @@ async function triggerManualReplan(topic) {
 }
 
 async function deleteGoal(goalId) {
-    if (!confirm("Are you sure you want to delete this roadmap and all its tasks?")) return;
+    const confirmed = await showDialog({
+        title: "Delete Roadmap?",
+        message: "Are you sure you want to delete this roadmap and all its tasks? This action cannot be undone.",
+        type: "confirm"
+    });
+    if (!confirmed) return;
     
     try {
         const res = await fetch(`${API_URL}/goals/${goalId}`, { method: "DELETE" });
@@ -517,7 +593,12 @@ async function deleteGoal(goalId) {
 }
 
 async function regenerateRoadmap(goal_id) {
-    if (!confirm("This will replace your current roadmap with a new, highly-detailed version using Gemini 3. Continue?")) return;
+    const confirmed = await showDialog({
+        title: "Regenerate Roadmap?",
+        message: "This will replace your current roadmap with a new, highly-detailed version using Gemini 3. Continue?",
+        type: "confirm"
+    });
+    if (!confirmed) return;
     
     const btn = document.getElementById("btn-regenerate-roadmap");
     const originalHTML = btn.innerHTML;
@@ -540,22 +621,84 @@ async function regenerateRoadmap(goal_id) {
     }
 }
 
-function showToast(message) {
+function showToast(message, type = "success") {
     const container = document.getElementById("toast-container");
     const toast = document.createElement("div");
-    toast.className = "toast-notification";
-    toast.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>${message}</span>`;
+    toast.className = `toast-notification ${type}`;
+    
+    let icon = "fa-circle-check";
+    if (type === "error") icon = "fa-circle-exclamation";
+    if (type === "info") icon = "fa-circle-info";
+    
+    toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
     container.appendChild(toast);
     
-    // Auto-remove after animation
     setTimeout(() => {
         toast.remove();
     }, 3000);
 }
 
-function requestManualReplanPopup() {
-    const topic = prompt("What specific topic would you like the AI to focus on or revise?", "Time Complexity");
-    if (topic) {
+function showDialog({title, message, type = "alert", placeholder = "Enter here..."}) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById("dialog-modal");
+        const titleEl = document.getElementById("dialog-title");
+        const msgEl = document.getElementById("dialog-message");
+        const promptContainer = document.getElementById("dialog-prompt-container");
+        const inputEl = document.getElementById("dialog-input");
+        const cancelBtn = document.getElementById("dialog-cancel-btn");
+        const confirmBtn = document.getElementById("dialog-confirm-btn");
+        
+        titleEl.innerText = title;
+        msgEl.innerText = message;
+        
+        // Setup type
+        if (type === "confirm" || type === "prompt") {
+            cancelBtn.classList.remove("hidden");
+        } else {
+            cancelBtn.classList.add("hidden");
+        }
+        
+        if (type === "prompt") {
+            promptContainer.classList.remove("hidden");
+            inputEl.value = "";
+            inputEl.placeholder = placeholder;
+            setTimeout(() => inputEl.focus(), 100);
+        } else {
+            promptContainer.classList.add("hidden");
+        }
+        
+        confirmBtn.innerText = type === "confirm" ? "Yes, Proceed" : (type === "prompt" ? "Submit" : "OK");
+        
+        modal.classList.remove("hidden");
+        dialogResolver = resolve;
+    });
+}
+
+function finalizeDialog(result) {
+    const modal = document.getElementById("dialog-modal");
+    const inputEl = document.getElementById("dialog-input");
+    
+    modal.classList.add("hidden");
+    
+    if (dialogResolver) {
+        if (result && document.getElementById("dialog-prompt-container").classList.contains("hidden") === false) {
+            dialogResolver(inputEl.value);
+        } else {
+            dialogResolver(result);
+        }
+        dialogResolver = null;
+    }
+}
+
+async function requestManualReplanPopup() {
+    const topic = await showDialog({
+        title: "Focus Area Re-plan",
+        message: "What specific topic would you like the AI to focus on or revise?",
+        type: "prompt",
+        placeholder: "e.g., Time Complexity"
+    });
+    
+    if (topic && topic.trim()) {
         triggerManualReplan(topic);
     }
 }

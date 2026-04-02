@@ -23,14 +23,17 @@ def create_goal(goal: schemas.GoalCreate, x_user_id: int = Header(...), db: Sess
     db.refresh(db_goal)
 
     # Automatically generate tasks with AI
-    plan = generate_learning_plan(goal.title, goal.daily_study_hours)
-    if not plan:
+    ai_res = generate_learning_plan(goal.title, goal.daily_study_hours)
+    if not ai_res:
         raise HTTPException(
             status_code=503, 
             detail="AI Mentor is currently busy or unavailable. Please try again in 30 seconds."
         )
 
-    for p in plan:
+    # Update title with corrected version
+    db_goal.title = ai_res["corrected_title"]
+    
+    for p in ai_res["tasks"]:
         db_task = models.Task(
             goal_id=db_goal.id,
             day_number=p["day_number"],
@@ -49,9 +52,9 @@ def regenerate_roadmap(goal_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Goal not found")
     
     # Generate new plan BEFORE touching the database (this takes seconds)
-    plan = generate_learning_plan(db_goal.title, db_goal.daily_study_hours)
+    ai_res = generate_learning_plan(db_goal.title, db_goal.daily_study_hours)
     
-    if not plan:
+    if not ai_res:
         raise HTTPException(
             status_code=503, 
             detail="AI Mentor is currently busy or unavailable. Please try again in 30 seconds."
@@ -60,7 +63,10 @@ def regenerate_roadmap(goal_id: int, db: Session = Depends(get_db)):
     # Rapid DB operation starts here
     db.query(models.Task).filter(models.Task.goal_id == goal_id).delete()
     
-    for p in plan:
+    # Update title with corrected version
+    db_goal.title = ai_res["corrected_title"]
+    
+    for p in ai_res["tasks"]:
         db_task = models.Task(
             goal_id=db_goal.id,
             day_number=p["day_number"],
@@ -69,7 +75,7 @@ def regenerate_roadmap(goal_id: int, db: Session = Depends(get_db)):
         )
         db.add(db_task)
     db.commit()
-    return {"message": "Roadmap regenerated successfully"}
+    return {"message": "Roadmap regenerated successfully", "corrected_title": ai_res["corrected_title"]}
 
 @router.get("/", response_model=List[schemas.Goal])
 def read_goals(x_user_id: Optional[int] = Header(None), skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

@@ -19,110 +19,114 @@ class UnifiedLLMClient:
         self.gemini_client = genai.Client(api_key=self.gemini_key) if self.gemini_key else None
         self.groq_client = Groq(api_key=self.groq_key) if self.groq_key else None
 
-    def generate_content(self, prompt: str, system_instruction: Optional[str] = None) -> str:
-        # Prio 1: Gemini (Highest Quality)
-        if self.gemini_client:
+    def _call_gemini(self, prompt: str, system_instruction: Optional[str] = None) -> Optional[str]:
+        if not self.gemini_client: return None
+        try:
+            response = self.gemini_client.models.generate_content(
+                model='gemini-2.0-flash', 
+                contents=prompt,
+                config=types.GenerateContentConfig(system_instruction=system_instruction) if system_instruction else None
+            )
+            return response.text if response.text else None
+        except Exception as e:
+            print(f"Gemini failed: {e}")
+            return None
+
+    def _call_groq(self, prompt: str, system_instruction: Optional[str] = None) -> Optional[str]:
+        if not self.groq_client: return None
+        # Using more reliable models for JSON tasks
+        for model in ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant"]:
             try:
-                response = self.gemini_client.models.generate_content(
-                    model='gemini-3-flash-preview', 
-                    contents=prompt,
-                    config=types.GenerateContentConfig(system_instruction=system_instruction) if system_instruction else None
+                messages = []
+                if system_instruction:
+                    messages.append({"role": "system", "content": system_instruction})
+                messages.append({"role": "user", "content": prompt})
+                
+                completion = self.groq_client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    timeout=10.0
                 )
-                if response.text:
-                    return response.text
+                if completion.choices[0].message.content:
+                    return completion.choices[0].message.content
             except Exception as e:
-                print(f"Gemini 3 Flash failed: {e}")
+                print(f"Groq ({model}) failed: {e}")
+        return None
 
-        # Prio 2: Groq (Ultra Fast Fallback)
-        if self.groq_client:
-            for model in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"]:
-                try:
-                    messages = []
-                    if system_instruction:
-                        messages.append({"role": "system", "content": system_instruction})
-                    messages.append({"role": "user", "content": prompt})
-                    
-                    completion = self.groq_client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        timeout=8.0 # Aggressive failover for speed
-                    )
-                    if completion.choices[0].message.content:
-                        return completion.choices[0].message.content
-                except Exception as e:
-                    print(f"Groq model {model} failed: {e}")
+    def _call_openrouter(self, prompt: str, system_instruction: Optional[str] = None) -> Optional[str]:
+        if not self.openrouter_key: return None
+        for model in ["google/gemini-flash-1.5", "meta-llama/llama-3.1-8b-instruct:free", "mistralai/mistral-7b-instruct:free"]:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.openrouter_key}",
+                    "Content-Type": "application/json",
+                }
+                messages = []
+                if system_instruction:
+                    messages.append({"role": "system", "content": system_instruction})
+                messages.append({"role": "user", "content": prompt})
+                
+                payload = {"model": model, "messages": messages}
+                response = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions", 
+                    headers=headers, json=payload, timeout=15.0
+                )
+                if response.status_code == 200:
+                    return response.json()['choices'][0]['message']['content']
+            except Exception as e:
+                print(f"OpenRouter ({model}) failed: {e}")
+        return None
 
-        # Prio 3: OpenRouter (Deep Backup)
-        if self.openrouter_key:
-            for model in ["meta-llama/llama-3.1-8b-instruct:free", "mistralai/mistral-7b-instruct:free"]:
-                try:
-                    headers = {
-                        "Authorization": f"Bearer {self.openrouter_key}",
-                        "Content-Type": "application/json",
-                    }
-                    messages = []
-                    if system_instruction:
-                        messages.append({"role": "system", "content": system_instruction})
-                    messages.append({"role": "user", "content": prompt})
-                    
-                    payload = {
-                        "model": model,
-                        "messages": messages
-                    }
-                    response = requests.post(
-                        "https://openrouter.ai/api/v1/chat/completions", 
-                        headers=headers, 
-                        json=payload,
-                        timeout=12.0
-                    )
-                    if response.status_code == 200:
-                        return response.json()['choices'][0]['message']['content']
-                except Exception as e:
-                    print(f"OpenRouter model {model} failed: {e}")
-
+    def generate_content(self, prompt: str, system_instruction: Optional[str] = None) -> str:
+        # Cascade through providers
+        for call_fn in [self._call_gemini, self._call_groq, self._call_openrouter]:
+            response = call_fn(prompt, system_instruction)
+            if response:
+                return response
         return ""
 
-    def generate_json(self, prompt: str, system_instruction: Optional[str] = None) -> Any:
-        full_prompt = prompt + "\nRespond ONLY with a valid JSON object or array. No markdown, no triple backticks."
-        response_text = self.generate_content(full_prompt, system_instruction)
-        
-        if not response_text:
-            return None
-            
-        cleaned = response_text.strip()
-        
-        # 1. Handle Markdown Blocks: ```json ... ```
+    def _extract_json(self, text: str) -> Optional[str]:
+        if not text: return None
         import re
-        code_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+        # Try markdown block first
+        code_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
         if code_block:
-            json_str = code_block.group(1).strip()
-        else:
-            # 2. Extract outermost JSON structure
-            start_curly = cleaned.find('{')
-            end_curly = cleaned.rfind('}')
-            start_bracket = cleaned.find('[')
-            end_bracket = cleaned.rfind(']')
+            return code_block.group(1).strip()
             
-            has_obj = start_curly != -1 and end_curly != -1
-            has_arr = start_bracket != -1 and end_bracket != -1
-            
-            if has_obj and has_arr:
-                if start_curly < start_bracket:
-                    json_str = cleaned[start_curly:end_curly+1]
-                else:
-                    json_str = cleaned[start_bracket:end_bracket+1]
-            elif has_obj:
-                json_str = cleaned[start_curly:end_curly+1]
-            elif has_arr:
-                json_str = cleaned[start_bracket:end_bracket+1]
-            else:
-                json_str = cleaned
+        # Try finding the outermost brackets/curlies
+        start_curly = text.find('{')
+        end_curly = text.rfind('}')
+        start_bracket = text.find('[')
+        end_bracket = text.rfind(']')
+        
+        if start_curly != -1 and end_curly != -1 and (start_bracket == -1 or start_curly < start_bracket):
+            return text[start_curly:end_curly+1]
+        elif start_bracket != -1 and end_bracket != -1:
+            return text[start_bracket:end_bracket+1]
+        return text.strip()
 
-        try:
-            return json.loads(json_str)
-        except Exception as e:
-            print(f"JSON Parse Error: {e}\nRaw content excerpt: {response_text[:400]}...")
-            return None
+    def generate_json(self, prompt: str, system_instruction: Optional[str] = None) -> Any:
+        format_instruction = "\nIMPORTANT: Respond ONLY with a valid JSON. No markdown backticks, no wrap-up text."
+        full_prompt = prompt + format_instruction
+        
+        # Try each provider; if the provider fails OR returns invalid JSON, move to the next
+        for provider_name, call_fn in [("Gemini", self._call_gemini), ("Groq", self._call_groq), ("OpenRouter", self._call_openrouter)]:
+            response_text = call_fn(full_prompt, system_instruction)
+            if not response_text:
+                continue
+                
+            json_str = self._extract_json(response_text)
+            if not json_str:
+                continue
+                
+            try:
+                data = json.loads(json_str)
+                print(f"Successfully generated JSON using {provider_name}")
+                return data
+            except Exception as e:
+                print(f"{provider_name} provided invalid JSON. Error: {e}. Retrying with next provider...")
+                
+        return None
 
 llm = UnifiedLLMClient()
 
@@ -158,24 +162,43 @@ def generate_learning_plan(goal_title: str, daily_hours: float):
     Create a highly detailed {duration}-day learning roadmap for the goal: '{goal_title}'.
     The user can study {daily_hours} hours daily.
     
-    CRITICAL RULE:
-    Each task's 'description' MUST be a single STRING containing Markdown.
-    It should include:
-    - Specific sub-topics to cover for Day X.
-    - 2-3 specific hands-on exercises or mini-projects for that day.
-    - Key concepts to memorize or practice.
-    Do NOT return 'description' as an object/map. It must be a plain STRING.
-    """
-    system = f"You are a World-Class Technical Mentor. Return a JSON array of exactly {duration} task objects. Keys: day_number (int), topic (string), description (string)."
+    1. AUTOMATIC CORRECTION:
+       First, identify if the goal title has any obvious typos (e.g., 'jaba' -> 'Java', 'pythun' -> 'Python').
+       Provide the correct, professional technical title for the roadmap in 'corrected_title'.
     
-    plan = llm.generate_json(prompt, system)
-    if not plan or not isinstance(plan, list):
+    2. TASKS:
+       Each task's 'description' MUST be a single STRING containing Markdown.
+       It should include:
+       - Specific sub-topics to cover for Day X.
+       - 2-3 specific hands-on exercises or mini-projects for that day.
+       - Key concepts to memorize or practice.
+       Do NOT return 'description' as an object/map. It must be a plain STRING.
+    """
+    system = f"""You are a World-Class Technical Mentor. Return ONLY a JSON object:
+    {{
+      "corrected_title": "string",
+      "tasks": [
+        {{ "day_number": int, "topic": "string", "description": "string" }},
+        ...
+      ]
+    }}
+    The tasks list must contain exactly {duration} day objects."""
+    
+    response = llm.generate_json(prompt, system)
+    if not response or not isinstance(response, dict):
         print("Failed to generate learning plan. No AI model responded.")
         return None
         
-    for p in plan:
+    tasks = response.get("tasks", [])
+    corrected_title = response.get("corrected_title", goal_title)
+    
+    if not tasks:
+        return None
+        
+    for p in tasks:
         p["description"] = _sanitize_description(p.get("description", ""))
-    return plan
+        
+    return {"tasks": tasks, "corrected_title": corrected_title}
 
 def generate_quiz(topic: str, description: str):
     prompt = f"""
@@ -210,8 +233,28 @@ def generate_quiz(topic: str, description: str):
         if isinstance(quiz, dict) and "questions" in quiz and len(quiz["questions"]) > 0:
             return quiz
             
-    print(f"Quiz Generation Failed for topic '{topic}'.")
-    return None
+def identify_weak_topics(topic: str, description: str, missed_context: list):
+    if not missed_context:
+        return "None"
+        
+    prompt = f"""
+    TOPIC: {topic}
+    CONTEXT: {description}
+    
+    MISSED QUESTIONS & USER ANSWERS:
+    {json.dumps(missed_context)}
+    
+    TASK: Based on the missed questions, identify exactly which 1-3 core concepts or sub-topics the student needs to revise. 
+    Examples: 'Variable Scope', 'Recursion Base Case', 'Asynchronous Syntax'.
+    
+    CONSTRUCTION:
+    Return a single STRING containing a comma-separated list of these topics. 
+    Be specific and brief. No conversational filler.
+    """
+    system = "You are a Technical Tutor. Identify precise learning gaps from incorrect quiz answers."
+    
+    weak_areas_str = llm.generate_content(prompt, system)
+    return weak_areas_str.strip() if weak_areas_str else "Further concept mastery needed"
 
 def analyze_code(code: str, language: str, action: str, question: str = "", context_text: str = ""):
     action_prompt = {
@@ -225,19 +268,26 @@ def analyze_code(code: str, language: str, action: str, question: str = "", cont
     PERSONALIZED MENTORING SESSION:
     User Roadmap: {context_text}
     Current Topic/Question: {question}
-    Code Provided ({language}):
-    {code}
     
-    TASK: {action_prompt}
+    CODE CONTEXT ({language.upper()}):
+    ``` {language}
+    {code}
+    ```
+    
+    YOUR TASK: {action_prompt}
+    
+    GUIDELINES:
+    1. Specifically use idioms and best practices for {language} (e.g., Pythonic code, Modern C++, Rust safety, etc.).
+    2. Reference the user's current roadmap progress ({context_text}) to tailor your explanation.
+    3. If the code is a snippet, assume it's part of a larger project related to the goal.
     
     SPECIAL AGENTIC RULE:
-    If the user expresses frustration, confusion, lack of confidence, or asks to revise a topic (e.g., 'I don't understand Time Complexity', 'I'm struggling'), 
-    you MUST include the literal string '[REPLAN: TopicName]' in your response (either at the start or end).
-    This string is a machine-readable instruction to rebuild their roadmap.
+    If the user expresses frustration, confusion, lack of confidence, or asks to revise a topic (e.g., 'I don't understand', 'I'm struggling'), 
+    you MUST include the literal string '[REPLAN: TopicName]' in your response.
     
     Respond in Markdown as a Senior Software Engineer.
     """
-    system = "You are a Senior Software Engineer and Mentor. Be encouraging and technical. Use Markdown."
+    system = f"You are an expert {language} developer and Senior Mentor. Provide highly technical, encouraging, and accurate guidance using standard Markdown."
     
     response = llm.generate_content(prompt, system)
     if not response:
@@ -263,26 +313,51 @@ def analyze_code(code: str, language: str, action: str, question: str = "", cont
     }
 
 def analyze_performance(quiz_results: list, all_tasks: list, days_since_start: int):
+    # 1. Identify Technical Gaps (Weak Topics Box)
     failed_attempts = [q for q in quiz_results if q.score < 0.6]
     weak_topics = list(set([f.weak_areas for f in failed_attempts if f.weak_areas and f.weak_areas.lower() != "none"]))
     
+    # 2. Analyze Pacing (Status Box)
     overdue_tasks = [t for t in all_tasks if not t.is_completed and t.day_number < days_since_start]
     
-    recommendation = "You're on the right track! Focus on maintaining daily consistency."
     status = "On Track"
-    
-    if weak_topics:
-        status = "Adjustment Recommended"
-        recommendation = f"It looks like you're struggling with {', '.join(weak_topics)}. I recommend a deeper dive into these fundamentals before moving on."
-    
     if len(overdue_tasks) > 2:
         status = "Behind Schedule"
-        recommendation = "You have several pending tasks from previous days. Consider re-balancing your roadmap to stay achievable."
+    elif weak_topics:
+        status = "Adjustment Recommended"
+    elif len(all_tasks) > 0 and all(t.is_completed for t in all_tasks if t.day_number <= days_since_start):
+        status = "On Track"
+    
+    # 3. Generate Personalized Mentor Tip (AI Recommendation Box)
+    # We use a very fast, targeted prompt to the LLM
+    prompt = f"""
+    Context:
+    - User Status: {status}
+    - Weak Topics: {', '.join(weak_topics) if weak_topics else 'None identified'}
+    - Tasks Overdue: {len(overdue_tasks)}
+    - Goal: {all_tasks[0].goal.title if all_tasks else 'Learning'}
+    
+    Task: Provide a 1-sentence, high-impact, encouraging mentor tip for the dashboard. 
+    Focus on motivation or a specific technical study tip. Keep it under 20 words.
+    """
+    system = "You are an elite Technical Coach. Be brief, professional, and highly encouraging."
+    
+    # Use generate_content for a simple string response
+    recommendation = llm.generate_content(prompt, system)
+    
+    if not recommendation:
+        # Fallback if AI is down
+        if status == "Behind Schedule":
+            recommendation = "You've got some catching up to do. Focus on one task at a time!"
+        elif status == "Adjustment Recommended":
+            recommendation = "Mastering the basics now will save you weeks later. Review your weak areas."
+        else:
+            recommendation = "Great consistency! Keep pushing, you're doing amazing."
 
     return {
         "status": status,
-        "recommendation": recommendation,
-        "weak_topics": weak_topics,
+        "recommendation": recommendation.strip(),
+        "weak_topics": weak_topics if weak_topics else ["Zero weak areas detected! Keep it up."],
         "overdue_count": len(overdue_tasks)
     }
 

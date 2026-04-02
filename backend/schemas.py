@@ -69,6 +69,8 @@ class QuizSubmission(BaseModel):
     score: float
     total_questions: int
     weak_areas: str
+    missed_questions: Optional[List[str]] = []
+    user_answers: Optional[List[str]] = []
 
 class QuizQuestion(BaseModel):
     question: str

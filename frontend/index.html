@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=1.1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -114,7 +114,7 @@
                 <div class="panel glass-card assistant-panel">
                     <div class="panel-header-tabs">
                         <h3 id="tab-study" class="tab-btn active" onclick="switchAssistantTab('study')"><i class="fa-solid fa-robot"></i> Study Assistant</h3>
-                        <h3 id="tab-studio" class="tab-btn" onclick="switchAssistantTab('studio')"><i class="fa-solid fa-laptop-code"></i> Dev Studio</h3>
+                        <h3 id="tab-studio" class="tab-btn" onclick="switchAssistantTab('studio')"><i class="fa-solid fa-laptop-code"></i> Code Studio</h3>
                     </div>
 
                     <!-- Study Assistant View -->
@@ -134,7 +134,7 @@
                         </div>
                     </div>
 
-                    <!-- Dev Studio View (Separate Code Workspace) -->
+                    <!-- Code Studio View (Separate Code Workspace) -->
                     <div id="dev-studio-view" class="dev-studio-interface hidden">
                         <div class="studio-workspace">
                             <div class="editor-header">
@@ -143,6 +143,16 @@
                                     <option value="javascript">JavaScript</option>
                                     <option value="java">Java</option>
                                     <option value="cpp">C++</option>
+                                    <option value="csharp">C#</option>
+                                    <option value="go">Go</option>
+                                    <option value="rust">Rust</option>
+                                    <option value="ruby">Ruby</option>
+                                    <option value="php">PHP</option>
+                                    <option value="swift">Swift</option>
+                                    <option value="kotlin">Kotlin</option>
+                                    <option value="html">HTML</option>
+                                    <option value="css">CSS</option>
+                                    <option value="sql">SQL</option>
                                 </select>
                                 <span class="mentor-hint"><i class="fa-solid fa-code"></i> Professional Code Playground</span>
                             </div>
@@ -204,6 +214,41 @@
                     </div>
                 </form>
             </div>
+            
+            <div id="quiz-result" class="hidden" style="text-align: center; padding: 20px;">
+                <div class="result-score-ring">
+                    <div id="quiz-score-circle" class="score-circle">
+                        <span id="quiz-score-text">0%</span>
+                    </div>
+                </div>
+                <h3 id="quiz-result-title" style="margin-top: 20px;">Awesome Effort!</h3>
+                <p id="quiz-result-desc" style="color: var(--text-secondary); margin-bottom: 20px;">You've completed the assessment.</p>
+                
+                <div id="quiz-review-list" class="scrollable" style="max-height: 40vh; text-align: left; margin-bottom: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                    <!-- Review items injected here -->
+                </div>
+
+                <button class="btn-primary" onclick="closeQuizModal()" style="width: 100%; justify-content: center;">
+                    Continue Journey <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Dialog Modal (Alert, Confirm, Prompt) -->
+    <div id="dialog-modal" class="modal-overlay hidden">
+        <div class="glass-modal fade-in-up" style="max-width: 450px; padding: 2.5rem;">
+            <h3 id="dialog-title" style="margin-bottom: 10px;">Message</h3>
+            <p id="dialog-message" style="color: var(--text-secondary); line-height: 1.5; margin-bottom: 25px;"></p>
+            
+            <div id="dialog-prompt-container" class="hidden" style="margin-bottom: 20px;">
+                <input type="text" id="dialog-input" placeholder="Enter here..." class="chat-textarea" style="min-height: 50px;">
+            </div>
+            
+            <div class="modal-actions" style="display:flex; gap:10px; justify-content: flex-end;">
+                <button id="dialog-cancel-btn" class="btn-secondary hidden" onclick="finalizeDialog(false)">Cancel</button>
+                <button id="dialog-confirm-btn" class="btn-primary" onclick="finalizeDialog(true)">OK</button>
+            </div>
         </div>
     </div>
 
@@ -212,7 +257,7 @@
 
     <!-- Make sure to use marked.js for parsing markdown -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/auth.js?v=1.1"></script>
+    <script src="js/app.js?v=1.1"></script>
 </body>
 </html>

@@ -80,14 +80,29 @@ def submit_quiz(task_id: int, quiz_sub: schemas.QuizSubmission, db: Session = De
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
+    # AI Analysis for Weak Topics
+    weak_areas = quiz_sub.weak_areas
+    if quiz_sub.score < 1.0 and quiz_sub.missed_questions:
+        from ..services.ai_agent import identify_weak_topics
+        missed_data = []
+        for i in range(len(quiz_sub.missed_questions)):
+            missed_data.append({
+                "q": quiz_sub.missed_questions[i],
+                "user_ans": quiz_sub.user_answers[i] if i < len(quiz_sub.user_answers) else "No answer"
+            })
+        
+        ai_weak_topics = identify_weak_topics(task.topic, task.description, missed_data)
+        if ai_weak_topics:
+            weak_areas = ai_weak_topics
+
     # Check if a result already exists
     existing_res = db.query(models.QuizResult).filter(models.QuizResult.task_id == task.id).first()
-    
+
     if existing_res:
         existing_res.goal_id = task.goal_id
         existing_res.score = quiz_sub.score
         existing_res.total_questions = quiz_sub.total_questions
-        existing_res.weak_areas = quiz_sub.weak_areas
+        existing_res.weak_areas = weak_areas
         quiz_res = existing_res
     else:
         quiz_res = models.QuizResult(
@@ -95,7 +110,7 @@ def submit_quiz(task_id: int, quiz_sub: schemas.QuizSubmission, db: Session = De
             goal_id=task.goal_id,
             score=quiz_sub.score,
             total_questions=quiz_sub.total_questions,
-            weak_areas=quiz_sub.weak_areas
+            weak_areas=weak_areas
         )
         db.add(quiz_res)
     
